@@ -1,0 +1,61 @@
+name: 🎬 Shorts Agent — Auto Publisher
+
+on:
+  # ── Scheduled runs (IST = UTC+5:30) ────────────────────────────────────────
+  schedule:
+    - cron: "0 23 * * *"   # 4:30 AM IST  (23:00 UTC previous day)
+    - cron: "0 15 * * *"   # 8:30 PM IST  (15:00 UTC)
+
+  # ── Manual trigger from GitHub Actions UI ──────────────────────────────────
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for manual run (optional)"
+        required: false
+        default: "Manual trigger"
+
+jobs:
+  generate-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📥 Checkout repo
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 🎞️ Install FFmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+
+      - name: 📦 Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: 🔑 Write Instagram session (if cached)
+        run: |
+          if [ -n "${{ secrets.INSTAGRAM_SESSION_JSON }}" ]; then
+            echo '${{ secrets.INSTAGRAM_SESSION_JSON }}' > ig_session.json
+            echo "Instagram session loaded from secret"
+          fi
+
+      - name: 🚀 Run Shorts Pipeline
+        env:
+          GROQ_API_KEY:                   ${{ secrets.GROQ_API_KEY }}
+          PEXELS_API_KEY:                 ${{ secrets.PEXELS_API_KEY }}
+          YOUTUBE_SERVICE_ACCOUNT_JSON:   ${{ secrets.YOUTUBE_SERVICE_ACCOUNT_JSON }}
+          INSTAGRAM_USERNAME:             ${{ secrets.INSTAGRAM_USERNAME }}
+          INSTAGRAM_PASSWORD:             ${{ secrets.INSTAGRAM_PASSWORD }}
+          RUMBLE_API_KEY:                 ${{ secrets.RUMBLE_API_KEY }}
+          RUMBLE_USERNAME:                ${{ secrets.RUMBLE_USERNAME }}
+        run: python main.py
+
+      - name: 📊 Upload run log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-log-${{ github.run_number }}
+          path: output/run_log.json
+          retention-days: 30
