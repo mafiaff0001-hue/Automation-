@@ -51,7 +51,7 @@ Respond ONLY in this exact JSON format (no markdown, no backticks):
         "Content-Type": "application/json",
     }
     payload = {
-        "model": "llama3-8b-8192",
+        "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.9,
         "max_tokens": 600,
