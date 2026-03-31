@@ -1,18 +1,19 @@
 name: 🎬 Shorts Agent — Auto Publisher
 
 on:
-  # ── Scheduled runs (IST = UTC+5:30) ────────────────────────────────────────
   schedule:
-    - cron: "0 23 * * *"   # 4:30 AM IST  (23:00 UTC previous day)
+    - cron: "0 23 * * *"   # 4:30 AM IST  (23:00 UTC)
     - cron: "0 15 * * *"   # 8:30 PM IST  (15:00 UTC)
 
-  # ── Manual trigger from GitHub Actions UI ──────────────────────────────────
   workflow_dispatch:
     inputs:
       reason:
         description: "Reason for manual run (optional)"
         required: false
         default: "Manual trigger"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   generate-and-upload:
@@ -45,7 +46,7 @@ jobs:
         env:
           GROQ_API_KEY:                   ${{ secrets.GROQ_API_KEY }}
           PEXELS_API_KEY:                 ${{ secrets.PEXELS_API_KEY }}
-          YOUTUBE_SERVICE_ACCOUNT_JSON:   ${{ secrets.YOUTUBE_SERVICE_ACCOUNT_JSON }}
+          YOUTUBE_TOKEN_JSON:             ${{ secrets.YOUTUBE_TOKEN_JSON }}
           INSTAGRAM_USERNAME:             ${{ secrets.INSTAGRAM_USERNAME }}
           INSTAGRAM_PASSWORD:             ${{ secrets.INSTAGRAM_PASSWORD }}
           RUMBLE_API_KEY:                 ${{ secrets.RUMBLE_API_KEY }}
@@ -59,3 +60,4 @@ jobs:
           name: run-log-${{ github.run_number }}
           path: output/run_log.json
           retention-days: 30
+          
