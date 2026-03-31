@@ -2,9 +2,8 @@ name: 🎬 Shorts Agent — Auto Publisher
 
 on:
   schedule:
-    - cron: "0 23 * * *"   # 4:30 AM IST  (23:00 UTC)
-    - cron: "0 15 * * *"   # 8:30 PM IST  (15:00 UTC)
-
+    - cron: "0 23 * * *"   # 4:30 AM IST
+    - cron: "0 15 * * *"   # 8:30 PM IST
   workflow_dispatch:
     inputs:
       reason:
@@ -35,22 +34,11 @@ jobs:
       - name: 📦 Install Python dependencies
         run: pip install -r requirements.txt
 
-      - name: 🔑 Write Instagram session (if cached)
-        run: |
-          if [ -n "${{ secrets.INSTAGRAM_SESSION_JSON }}" ]; then
-            echo '${{ secrets.INSTAGRAM_SESSION_JSON }}' > ig_session.json
-            echo "Instagram session loaded from secret"
-          fi
-
       - name: 🚀 Run Shorts Pipeline
         env:
-          GROQ_API_KEY:                   ${{ secrets.GROQ_API_KEY }}
-          PEXELS_API_KEY:                 ${{ secrets.PEXELS_API_KEY }}
-          YOUTUBE_TOKEN_JSON:             ${{ secrets.YOUTUBE_TOKEN_JSON }}
-          INSTAGRAM_USERNAME:             ${{ secrets.INSTAGRAM_USERNAME }}
-          INSTAGRAM_PASSWORD:             ${{ secrets.INSTAGRAM_PASSWORD }}
-          RUMBLE_API_KEY:                 ${{ secrets.RUMBLE_API_KEY }}
-          RUMBLE_USERNAME:                ${{ secrets.RUMBLE_USERNAME }}
+          GROQ_API_KEY:               ${{ secrets.GROQ_API_KEY }}
+          PEXELS_API_KEY:             ${{ secrets.PEXELS_API_KEY }}
+          ACTIVEPIECES_WEBHOOK_URL:   ${{ secrets.ACTIVEPIECES_WEBHOOK_URL }}
         run: python main.py
 
       - name: 📊 Upload run log
