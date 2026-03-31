@@ -1,23 +1,20 @@
 """
 uploader.py
-- YouTube + Instagram: via Activepieces webhook (permanent, free forever)
-- Sends video file + metadata to Activepieces
-- Activepieces handles uploading to all platforms
+Sends video + metadata to Make.com webhook.
+Make.com handles YouTube + Instagram uploads permanently.
 """
 
 import os
-import time
 import requests
 
 
 def upload_all(video_path: str, title: str, description: str, hashtags: str) -> dict:
-    """Send video to Activepieces webhook — it uploads to YouTube + Instagram"""
 
-    webhook_url = os.environ.get("ACTIVEPIECES_WEBHOOK_URL")
+    webhook_url = os.environ.get("MAKE_WEBHOOK_URL")
     if not webhook_url:
-        raise RuntimeError("ACTIVEPIECES_WEBHOOK_URL secret not set")
+        raise RuntimeError("MAKE_WEBHOOK_URL secret not set")
 
-    print("📡 Sending video to Activepieces (YouTube + Instagram)...")
+    print("📡 Sending video to Make.com (YouTube + Instagram)...")
 
     with open(video_path, "rb") as vf:
         resp = requests.post(
@@ -32,13 +29,13 @@ def upload_all(video_path: str, title: str, description: str, hashtags: str) -> 
         )
 
     if resp.status_code not in (200, 201, 202):
-        raise RuntimeError(f"Activepieces webhook error {resp.status_code}: {resp.text[:200]}")
+        raise RuntimeError(f"Make.com error {resp.status_code}: {resp.text[:200]}")
 
-    print("  ✅ Video sent to Activepieces successfully!")
-    print("  📺 YouTube — uploading via Activepieces...")
-    print("  📸 Instagram — uploading via Activepieces...")
+    print("  ✅ Video sent to Make.com successfully!")
+    print("  📺 YouTube uploading...")
+    print("  📸 Instagram uploading...")
 
     return {
-        "youtube":   "⏳ Processing via Activepieces",
-        "instagram": "⏳ Processing via Activepieces",
+        "youtube":   "⏳ Processing via Make.com",
+        "instagram": "⏳ Processing via Make.com",
     }
