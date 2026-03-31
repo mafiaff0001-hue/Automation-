@@ -36,9 +36,9 @@ jobs:
 
       - name: 🚀 Run Shorts Pipeline
         env:
-          GROQ_API_KEY:               ${{ secrets.GROQ_API_KEY }}
-          PEXELS_API_KEY:             ${{ secrets.PEXELS_API_KEY }}
-          ACTIVEPIECES_WEBHOOK_URL:   ${{ secrets.ACTIVEPIECES_WEBHOOK_URL }}
+          GROQ_API_KEY:      ${{ secrets.GROQ_API_KEY }}
+          PEXELS_API_KEY:    ${{ secrets.PEXELS_API_KEY }}
+          MAKE_WEBHOOK_URL:  ${{ secrets.MAKE_WEBHOOK_URL }}
         run: python main.py
 
       - name: 📊 Upload run log
