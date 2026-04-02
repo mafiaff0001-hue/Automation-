@@ -21,7 +21,8 @@ def clean_script(script: str) -> str:
 
 
 async def _generate(text: str, output_path: str):
-    communicate = edge_tts.Communicate(text, VOICE, rate="+10%", pitch="+0Hz")
+    # Slowed down from +10% to -5% so 130-150 word scripts hit 40-50 seconds
+    communicate = edge_tts.Communicate(text, VOICE, rate="-5%", pitch="+0Hz")
     await communicate.save(output_path)
 
 
