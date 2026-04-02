@@ -43,7 +43,9 @@ def run():
         print("📝 Step 1/4: Generating script...")
         script_data = generate_script()
         run_data["title"] = script_data["title"]
+        word_count = len(script_data["script"].replace("[PAUSE]", "").split())
         print(f"   Title  : {script_data['title']}")
+        print(f"   Words  : {word_count}")
         print(f"   Script : {script_data['script'][:80]}...\n")
 
         # Step 2 — Voiceover
@@ -53,12 +55,14 @@ def run():
         )
         print()
 
-        # Step 3 — Video
+        # Step 3 — Video (pass topic-matched queries)
         print("🎬 Step 3/4: Creating video...")
+        video_queries = script_data.get("video_queries", None)
         video_path = create_video(
             script=script_data["script"],
             voiceover_path=voiceover_path,
             title=script_data["title"],
+            video_queries=video_queries,
         )
         print()
 
@@ -77,9 +81,8 @@ def run():
         print("\n" + "=" * 55)
         print("✅  PIPELINE COMPLETE!")
         for platform, url in results.items():
-            icon = {"youtube": "📺", "instagram": "📸", "rumble": "📹"}.get(platform, "🔗")
-            status = url if url else "❌ Failed"
-            print(f"   {icon}  {platform.capitalize():12} {status}")
+            icon = {"youtube": "📺", "instagram": "📸"}.get(platform, "🔗")
+            print(f"   {icon}  {platform.capitalize():12} {url}")
         print("=" * 55 + "\n")
 
     except Exception as e:
@@ -96,4 +99,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-                                                                         
