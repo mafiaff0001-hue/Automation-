@@ -1,6 +1,7 @@
 """
 voiceover.py
-Generates MP3 voiceover using Microsoft Edge-TTS (completely free)
+Generates MP3 voiceover using Microsoft Edge-TTS (completely free).
+Rate set to -10% so 150-170 word scripts hit 40-48 seconds.
 """
 
 import asyncio
@@ -8,9 +9,7 @@ import re
 import os
 import edge_tts
 
-VOICE = "en-US-AndrewNeural"   # Energetic male voice
-# VOICE = "en-US-AriaNeural"   # Clear female voice
-# VOICE = "en-GB-RyanNeural"   # British male
+VOICE = "en-US-AndrewNeural"
 
 
 def clean_script(script: str) -> str:
@@ -21,8 +20,7 @@ def clean_script(script: str) -> str:
 
 
 async def _generate(text: str, output_path: str):
-    # Slowed down from +10% to -5% so 130-150 word scripts hit 40-50 seconds
-    communicate = edge_tts.Communicate(text, VOICE, rate="-5%", pitch="+0Hz")
+    communicate = edge_tts.Communicate(text, VOICE, rate="-10%", pitch="+0Hz")
     await communicate.save(output_path)
 
 
@@ -35,5 +33,5 @@ def generate_voiceover(script: str, output_path: str = "output/voiceover.mp3") -
 
 
 if __name__ == "__main__":
-    test = "Did you know honey never expires? [PAUSE] Archaeologists found 3000-year-old honey in Egyptian tombs and it was still perfectly edible! [PAUSE] Follow for more amazing facts!"
+    test = "Most people don't know that honey never expires. [PAUSE] Archaeologists found 3000 year old honey in Egyptian tombs. [PAUSE] It was still perfectly edible. [PAUSE] Honey has natural antibacterial properties. [PAUSE] Its low moisture content prevents bacteria from growing. [PAUSE] Ancient Egyptians used it to preserve food and treat wounds. [PAUSE] Even today, hospitals use medical grade honey on wounds. [PAUSE] A single jar of honey can outlast entire civilizations. [PAUSE] Follow for more mind-blowing facts every day!"
     generate_voiceover(test)
