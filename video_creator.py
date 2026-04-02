@@ -1,7 +1,7 @@
 """
 video_creator.py
-Downloads free Pexels stock video and assembles vertical Short using FFmpeg.
-Guaranteed 45s output via explicit audio padding.
+Downloads topic-matched Pexels stock video and assembles vertical Short.
+Background video matches the script topic. Guaranteed 45s output.
 """
 
 import os
@@ -15,16 +15,14 @@ OUTPUT_DIR       = "output"
 SHORT_W, SHORT_H = 1080, 1920
 TARGET_DURATION  = 45.0
 
-VIDEO_QUERIES = [
+# Fallback queries if topic queries not provided
+DEFAULT_QUERIES = [
     "nature amazing", "space universe stars", "science lab",
     "ocean underwater", "animals wildlife", "technology futuristic",
-    "earth aerial drone", "human brain mind", "ancient history",
-    "deep sea creatures",
 ]
 
 
 def run(cmd):
-    """Run ffmpeg command and raise on error with stderr output."""
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg failed:\n{result.stderr[-800:]}")
@@ -42,25 +40,38 @@ def get_duration(path: str) -> float:
         return 0.0
 
 
-def download_pexels_video(query: str, output_path: str) -> str:
+def download_pexels_video(queries: list, output_path: str) -> str:
+    """Try each query until a good video is found."""
     headers = {"Authorization": PEXELS_API_KEY}
-    params  = {"query": query, "per_page": 15, "orientation": "portrait"}
-    r = requests.get("https://api.pexels.com/videos/search",
-                     headers=headers, params=params, timeout=15)
-    r.raise_for_status()
-    videos = r.json().get("videos", [])
-    long_videos = [v for v in videos if v.get("duration", 0) >= 20]
-    video = random.choice(long_videos) if long_videos else random.choice(videos)
-    video_files = sorted(video["video_files"],
-                         key=lambda x: x.get("width", 0), reverse=True)
-    video_url = video_files[0]["link"]
-    print(f"  📥 Downloading stock video ({video.get('duration', '?')}s)...")
-    dl = requests.get(video_url, timeout=120, stream=True)
-    with open(output_path, "wb") as f:
-        for chunk in dl.iter_content(chunk_size=8192):
-            f.write(chunk)
-    print("  ✅ Stock video saved")
-    return output_path
+
+    for query in queries:
+        try:
+            params = {"query": query, "per_page": 15, "orientation": "portrait"}
+            r = requests.get("https://api.pexels.com/videos/search",
+                             headers=headers, params=params, timeout=15)
+            r.raise_for_status()
+            videos = r.json().get("videos", [])
+            if not videos:
+                continue
+
+            long_videos = [v for v in videos if v.get("duration", 0) >= 20]
+            video = random.choice(long_videos) if long_videos else random.choice(videos)
+            video_files = sorted(video["video_files"],
+                                 key=lambda x: x.get("width", 0), reverse=True)
+            video_url = video_files[0]["link"]
+
+            print(f"  📥 Downloading stock video for '{query}' ({video.get('duration', '?')}s)...")
+            dl = requests.get(video_url, timeout=120, stream=True)
+            with open(output_path, "wb") as f:
+                for chunk in dl.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            print(f"  ✅ Stock video saved")
+            return output_path
+        except Exception as e:
+            print(f"  ⚠️  Query '{query}' failed: {e}, trying next...")
+            continue
+
+    raise RuntimeError("All video queries failed")
 
 
 def split_into_chunks(script: str, words_per_chunk: int = 4) -> list:
@@ -93,8 +104,12 @@ def build_caption_filter(chunks: list, vo_duration: float) -> str:
     return ",".join(filters) if filters else "null"
 
 
-def create_video(script: str, voiceover_path: str, title: str) -> str:
+def create_video(script: str, voiceover_path: str, title: str,
+                 video_queries: list = None) -> str:
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # Use topic-matched queries from script_generator, fallback to defaults
+    queries = video_queries if video_queries else DEFAULT_QUERIES
 
     raw_path       = f"{OUTPUT_DIR}/raw_bg.mp4"
     looped_path    = f"{OUTPUT_DIR}/looped_bg.mp4"
@@ -103,14 +118,13 @@ def create_video(script: str, voiceover_path: str, title: str) -> str:
     padded_audio   = f"{OUTPUT_DIR}/audio_padded.aac"
     final_path     = f"{OUTPUT_DIR}/final_short.mp4"
 
-    query = random.choice(VIDEO_QUERIES)
-    print(f"🎬 Downloading background video ({query})...")
-    download_pexels_video(query, raw_path)
+    print(f"🎬 Downloading topic-matched background video...")
+    download_pexels_video(queries, raw_path)
 
     vo_duration = get_duration(voiceover_path)
     print(f"✂️  Voiceover: {vo_duration:.1f}s → Target: {TARGET_DURATION:.1f}s")
 
-    # ── Step 1: Pad voiceover to exactly TARGET_DURATION ──────────────────
+    # Step 1: Pad voiceover to exactly TARGET_DURATION
     pad_secs = max(TARGET_DURATION - vo_duration + 0.5, 0.5)
     run([
         "ffmpeg", "-y",
@@ -122,7 +136,7 @@ def create_video(script: str, voiceover_path: str, title: str) -> str:
     ])
     print(f"  ✅ Audio padded to {get_duration(padded_audio):.1f}s")
 
-    # ── Step 2: Loop background to TARGET_DURATION ────────────────────────
+    # Step 2: Loop background to TARGET_DURATION
     bg_dur = get_duration(raw_path)
     if bg_dur < TARGET_DURATION:
         loops = int(TARGET_DURATION / bg_dur) + 2
@@ -139,7 +153,7 @@ def create_video(script: str, voiceover_path: str, title: str) -> str:
     else:
         source_path = raw_path
 
-    # ── Step 3: Resize to 1080x1920, trim to TARGET_DURATION ─────────────
+    # Step 3: Resize to 1080x1920
     print("📐 Resizing to vertical format...")
     run([
         "ffmpeg", "-y", "-i", source_path,
@@ -152,7 +166,7 @@ def create_video(script: str, voiceover_path: str, title: str) -> str:
         resized_path,
     ])
 
-    # ── Step 4: Burn in captions ──────────────────────────────────────────
+    # Step 4: Burn in captions (only during voiceover, not silent padding)
     print("📝 Adding captions...")
     chunks = split_into_chunks(script, words_per_chunk=4)
     caption_filter = build_caption_filter(chunks, vo_duration)
@@ -163,7 +177,7 @@ def create_video(script: str, voiceover_path: str, title: str) -> str:
         captioned_path,
     ])
 
-    # ── Step 5: Combine video + padded audio, hard-lock to TARGET_DURATION ─
+    # Step 5: Merge — both streams locked to TARGET_DURATION
     print("🔊 Merging voiceover...")
     run([
         "ffmpeg", "-y",
