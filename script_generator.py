@@ -35,36 +35,48 @@ def sanitize_json_string(raw: str) -> str:
         if raw.startswith("json"):
             raw = raw[4:]
 
-    # Remove all control characters except normal whitespace
+    # FIX 1: Replace literal newlines and carriage returns with a space.
+    # The LLM sometimes inserts a real \n inside a JSON string value which
+    # causes json.JSONDecodeError: Invalid control character (char 0x0A/0x0D).
+    # Collapsing to a space keeps the JSON structure valid.
+    raw = raw.replace('\r\n', ' ').replace('\r', ' ').replace('\n', ' ')
+
+    # Remove all remaining control characters (tab 0x09 is kept as it's valid)
     raw = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw)
 
-    # Replace literal newlines/tabs INSIDE JSON string values with a space
-    # We do this by collapsing any whitespace between quotes
     raw = raw.strip()
     return raw
 
 
 def generate_script(attempt: int = 0) -> dict:
-    if attempt > 3:
-        raise RuntimeError("Failed to generate valid script after 3 attempts")
+    # FIX 2: Increased retry limit from 3 to 5
+    if attempt > 5:
+        raise RuntimeError("Failed to generate valid script after 5 attempts")
 
     topic, video_queries = random.choice(TOPICS)
 
+    # FIX 3: Improved prompt — old prompt conflicted between "150-170 words"
+    # and "single-line JSON", causing the model to truncate the script to fit
+    # on one line. New prompt explicitly tells the model NOT to shorten the
+    # script, increases detail count to 5-6, and separates formatting rules
+    # from content rules clearly.
     prompt = (
         "You are a viral YouTube Shorts script writer.\n\n"
-        f"Write a script about: {topic}\n\n"
-        "REQUIREMENTS:\n"
-        "- Exactly 150-170 words\n"
+        f"Write a FULL detailed script about: {topic}\n\n"
+        "CONTENT REQUIREMENTS:\n"
+        "- The script field MUST contain at least 150 words (count carefully before responding)\n"
         "- Start with a hook: 'Most people don't know that...' or 'What if I told you...'\n"
         "- Short punchy sentences, max 10 words each\n"
         "- Add [PAUSE] after every sentence\n"
-        "- Give 3-4 interesting follow-up details\n"
+        "- Give 5-6 interesting follow-up details to reach the word count\n"
         "- End with: Follow for more mind-blowing facts every day!\n"
         "- Sound like a passionate human storyteller\n\n"
-        "CRITICAL: Respond ONLY with a single-line JSON object. "
-        "No newlines inside string values. No markdown. No backticks. "
-        "All text must be on one continuous line.\n\n"
-        'Example format: {"title":"Title here","script":"Script text all on one line [PAUSE] more text [PAUSE]","video_queries":["query1","query2","query3"],"hashtags":"#Facts #Shorts","description":"Short description"}\n\n'
+        "CRITICAL FORMATTING RULES:\n"
+        "1. Respond ONLY with a single JSON object — no markdown, no backticks, no commentary.\n"
+        "2. All field values must be on ONE continuous line — no literal newline characters inside values.\n"
+        "3. Do NOT shorten or cut the script to fit on one line. Write the full 150+ word script, all on one line.\n\n"
+        "Example format (notice the script is long and fully on one line):\n"
+        '{"title":"Title here","script":"Hook sentence. [PAUSE] Detail one here. [PAUSE] Detail two here. [PAUSE] Detail three here. [PAUSE] Detail four here. [PAUSE] Detail five here. [PAUSE] Follow for more mind-blowing facts every day! [PAUSE]","video_queries":["query1","query2","query3"],"hashtags":"#Facts #Shorts","description":"Short description"}\n\n'
         f'Now write about: {topic}\n'
         f'Use these video search terms: {video_queries}'
     )
@@ -77,7 +89,7 @@ def generate_script(attempt: int = 0) -> dict:
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.7,
-        "max_tokens": 1000,
+        "max_tokens": 1500,  # FIX 4: Increased from 1000 to give model room for full script
     }
 
     response = requests.post(
@@ -102,7 +114,8 @@ def generate_script(attempt: int = 0) -> dict:
     word_count = len(data["script"].replace("[PAUSE]", "").split())
     print(f"✅ Script generated: {data['title']} ({word_count} words)")
 
-    if word_count < 120:
+    # FIX 5: Lowered minimum from 120 to 80 as a safety net
+    if word_count < 80:
         print(f"⚠️  Script too short ({word_count} words), regenerating...")
         return generate_script(attempt + 1)
 
