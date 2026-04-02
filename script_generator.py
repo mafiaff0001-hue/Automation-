@@ -1,6 +1,7 @@
 """
 script_generator.py
-Generates Facts & Trivia video script using Groq (free Llama 3)
+Generates Facts & Trivia video script using Groq (free Llama 3).
+Returns topic keywords so video background matches the script.
 """
 
 import os
@@ -11,40 +12,41 @@ import random
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 TOPICS = [
-    "a mind-blowing science fact",
-    "a weird historical fact",
-    "a surprising animal fact",
-    "an unbelievable space fact",
-    "a strange psychological fact",
-    "a fascinating food fact",
-    "an incredible human body fact",
-    "a surprising technology fact",
-    "a bizarre world record fact",
-    "an amazing ocean deep sea fact",
+    ("a mind-blowing science fact", ["science lab", "experiment chemistry", "physics quantum"]),
+    ("a weird historical fact", ["ancient history", "medieval castle", "roman empire"]),
+    ("a surprising animal fact", ["animals wildlife", "exotic animals", "jungle nature"]),
+    ("an unbelievable space fact", ["space universe stars", "galaxy nebula", "planets solar system"]),
+    ("a strange psychological fact", ["human brain mind", "psychology meditation", "neurons thinking"]),
+    ("a fascinating food fact", ["food cooking kitchen", "exotic fruit market", "chef restaurant"]),
+    ("an incredible human body fact", ["human body anatomy", "heartbeat pulse", "DNA biology"]),
+    ("a surprising technology fact", ["technology futuristic", "computer circuit", "robot AI"]),
+    ("a bizarre world record fact", ["world record crowd", "stadium people", "extreme sport"]),
+    ("an amazing ocean deep sea fact", ["ocean underwater", "deep sea creatures", "coral reef fish"]),
 ]
 
 
 def generate_script() -> dict:
-    topic = random.choice(TOPICS)
+    topic, video_queries = random.choice(TOPICS)
 
-    prompt = f"""You are a viral YouTube Shorts and TikTok script writer known for making people feel like they're watching a mini-documentary.
+    prompt = f"""You are a viral YouTube Shorts script writer creating mini-documentary style content.
 
-Write a 45-55 second spoken script about: {topic}
+Write a script about: {topic}
 
-Rules:
-- Start with a powerful HOOK in the first 3 seconds (e.g. "What if I told you...", "Most people have no idea that...", "This fact will change how you see the world...")
-- Write in a natural, conversational, storytelling tone — like a smart friend explaining something fascinating
-- Keep sentences SHORT and punchy — no more than 10 words per sentence
-- Add [PAUSE] between every sentence for natural pacing
-- Build up with 2-3 interesting details or follow-up facts to make it feel complete
+STRICT REQUIREMENTS:
+- Exactly 150-170 words (this is non-negotiable — count carefully)
+- Start with a powerful hook: "Most people don't know that..." or "What if I told you..." or "This will change how you see the world..."
+- Tell it like a story — build suspense, give specific facts with numbers/dates/names
+- Short punchy sentences — max 10 words each
+- Add [PAUSE] after every sentence
+- Give 3-4 interesting follow-up details to expand the story
 - End with: "Follow for more mind-blowing facts every day!"
-- Total spoken words: 120-150 words (this is crucial for 45-55 seconds of audio)
-- Make it feel REAL and specific — use numbers, names, or dates where possible
+- Sound like a passionate human, not a robot
 
-Respond ONLY in this exact JSON format (no markdown, no backticks):
+Respond ONLY in this exact JSON format, no markdown, no backticks:
 {{
   "title": "catchy title under 60 chars",
-  "script": "full script with [PAUSE] markers",
+  "script": "full 150-170 word script with [PAUSE] after every sentence",
+  "video_queries": ["{video_queries[0]}", "{video_queries[1]}", "{video_queries[2]}"],
   "hashtags": "#Facts #DidYouKnow #Shorts #Trivia #LearnSomethingNew #Viral #FYP #Amazing #MindBlown #Knowledge",
   "description": "one line description under 100 chars"
 }}"""
@@ -56,8 +58,8 @@ Respond ONLY in this exact JSON format (no markdown, no backticks):
     payload = {
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.9,
-        "max_tokens": 800,
+        "temperature": 0.8,
+        "max_tokens": 1000,
     }
 
     response = requests.post(
@@ -69,7 +71,6 @@ Respond ONLY in this exact JSON format (no markdown, no backticks):
     response.raise_for_status()
 
     content = response.json()["choices"][0]["message"]["content"].strip()
-    # Strip markdown fences if present
     if "```" in content:
         content = content.split("```")[1]
         if content.startswith("json"):
@@ -77,7 +78,15 @@ Respond ONLY in this exact JSON format (no markdown, no backticks):
     content = content.strip()
 
     data = json.loads(content)
-    print(f"✅ Script generated: {data['title']}")
+
+    # Validate word count — regenerate once if too short
+    word_count = len(data["script"].replace("[PAUSE]", "").split())
+    print(f"✅ Script generated: {data['title']} ({word_count} words)")
+
+    if word_count < 120:
+        print("⚠️  Script too short, regenerating...")
+        return generate_script()
+
     return data
 
 
