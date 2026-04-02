@@ -9,28 +9,23 @@ import requests
 
 
 def get_direct_video_url(video_path: str) -> str:
-    """Upload video to transfer.sh to get a public direct-download URL for Instagram."""
+    """Upload video to 0x0.st — works on GitHub Actions, returns direct MP4 URL."""
     print("  ☁️  Getting direct video URL for Instagram...")
 
-    filename = os.path.basename(video_path)
-
     with open(video_path, "rb") as vf:
-        resp = requests.put(
-            f"https://transfer.sh/{filename}",
-            data=vf,
-            headers={
-                "Max-Days": "1",
-                "Content-Type": "video/mp4",
-            },
+        resp = requests.post(
+            "https://0x0.st",
+            files={"file": ("final_short.mp4", vf, "video/mp4")},
+            data={"expires": "24"},
             timeout=180,
         )
 
     if resp.status_code not in (200, 201):
-        raise RuntimeError(f"transfer.sh upload failed [{resp.status_code}]: {resp.text[:200]}")
+        raise RuntimeError(f"0x0.st upload failed [{resp.status_code}]: {resp.text[:200]}")
 
     direct_url = resp.text.strip()
     if not direct_url.startswith("http"):
-        raise RuntimeError(f"transfer.sh returned unexpected response: {direct_url[:200]}")
+        raise RuntimeError(f"0x0.st unexpected response: {direct_url[:200]}")
 
     return direct_url
 
@@ -70,4 +65,4 @@ def upload_all(video_path: str, title: str, description: str, hashtags: str) -> 
     return {
         "youtube":   "⏳ Processing via Make.com",
         "instagram": "⏳ Processing via Make.com",
-            }
+    }
