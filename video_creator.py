@@ -1,7 +1,7 @@
 """
 video_creator.py
 Downloads free Pexels stock video and assembles vertical Short using FFmpeg.
-Fixes: special character escaping, minimum 30s duration with video looping.
+Features: word-by-word animated captions, 45-50s target duration, realistic look.
 """
 
 import os
@@ -25,9 +25,9 @@ VIDEO_QUERIES = [
     "deep sea creatures",
 ]
 
-OUTPUT_DIR  = "output"
+OUTPUT_DIR    = "output"
 SHORT_W, SHORT_H = 1080, 1920
-MIN_DURATION = 30.0  # minimum 30 seconds
+MIN_DURATION  = 45.0   # target 45-50 seconds
 
 
 def download_pexels_video(query: str, output_path: str) -> str:
@@ -41,8 +41,8 @@ def download_pexels_video(query: str, output_path: str) -> str:
     r.raise_for_status()
     videos = r.json().get("videos", [])
 
-    # Filter videos that are at least 15 seconds long
-    long_videos = [v for v in videos if v.get("duration", 0) >= 15]
+    # Prefer videos at least 20s long for richer background
+    long_videos = [v for v in videos if v.get("duration", 0) >= 20]
     video = random.choice(long_videos) if long_videos else random.choice(videos)
 
     video_files = sorted(video["video_files"], key=lambda x: x.get("width", 0), reverse=True)
@@ -70,34 +70,76 @@ def get_duration(path: str) -> float:
         return 0.0
 
 
-def clean_caption(text: str) -> str:
-    """Safely escape text for FFmpeg drawtext filter"""
-    # Remove stage directions
-    text = re.sub(r"\[.*?\]", " ", text)
-    # Remove all special characters that break FFmpeg
-    text = re.sub(r"[\\':=\[\]{}|<>]", " ", text)
-    # Collapse whitespace
+def split_into_chunks(script: str, words_per_chunk: int = 5) -> list:
+    """
+    Split script into small readable chunks (4-5 words each).
+    Removes [PAUSE] markers and stage directions.
+    """
+    # Remove stage directions like [PAUSE], [MUSIC], etc.
+    text = re.sub(r"\[.*?\]", " ", script)
+    # Clean special chars that break FFmpeg drawtext
+    text = re.sub(r"[\\':=\[\]{}|<>\"#@&*^%$!]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
-    # Limit length
-    return text[:120]
+
+    words = text.split()
+    chunks = []
+    for i in range(0, len(words), words_per_chunk):
+        chunk = " ".join(words[i:i + words_per_chunk])
+        chunks.append(chunk)
+    return chunks
+
+
+def build_caption_filter(chunks: list, total_duration: float) -> str:
+    """
+    Build FFmpeg drawtext filter that shows one chunk at a time,
+    evenly distributed across the video duration.
+    Large white text with black stroke — highly readable on any background.
+    """
+    if not chunks:
+        return "null"
+
+    time_per_chunk = total_duration / len(chunks)
+    filters = []
+
+    for i, chunk in enumerate(chunks):
+        start = i * time_per_chunk
+        end   = start + time_per_chunk
+
+        # Safe escape: only allow alphanumeric + space + basic punctuation
+        safe = re.sub(r"[^a-zA-Z0-9 .,!?;]", "", chunk).strip()
+        if not safe:
+            continue
+
+        filters.append(
+            f"drawtext=text='{safe}':"
+            f"fontsize=72:"           # Large font — easily readable on mobile
+            f"fontcolor=white:"
+            f"borderw=5:"
+            f"bordercolor=black:"
+            f"x=(w-text_w)/2:"
+            f"y=(h*3/4):"            # Lower third of screen
+            f"enable='between(t,{start:.2f},{end:.2f})'"
+        )
+
+    return ",".join(filters) if filters else "null"
 
 
 def create_video(script: str, voiceover_path: str, title: str) -> str:
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    query        = random.choice(VIDEO_QUERIES)
-    raw_path     = f"{OUTPUT_DIR}/raw_bg.mp4"
-    looped_path  = f"{OUTPUT_DIR}/looped_bg.mp4"
-    resized_path = f"{OUTPUT_DIR}/resized_bg.mp4"
+    query         = random.choice(VIDEO_QUERIES)
+    raw_path      = f"{OUTPUT_DIR}/raw_bg.mp4"
+    looped_path   = f"{OUTPUT_DIR}/looped_bg.mp4"
+    resized_path  = f"{OUTPUT_DIR}/resized_bg.mp4"
     captioned_path = f"{OUTPUT_DIR}/captioned.mp4"
-    final_path   = f"{OUTPUT_DIR}/final_short.mp4"
+    final_path    = f"{OUTPUT_DIR}/final_short.mp4"
 
     print(f"🎬 Downloading background video ({query})...")
     download_pexels_video(query, raw_path)
 
-    # Get voiceover duration — target at least 30s
-    vo_duration = get_duration(voiceover_path)
-    target_duration = max(vo_duration + 1.5, MIN_DURATION)
+    # Get voiceover duration — target at least 45s
+    vo_duration     = get_duration(voiceover_path)
+    target_duration = max(vo_duration + 2.0, MIN_DURATION)
     print(f"✂️  Target duration: {target_duration:.1f}s")
 
     # Loop video if shorter than target duration
@@ -127,35 +169,31 @@ def create_video(script: str, voiceover_path: str, title: str) -> str:
             f"scale={SHORT_W}:{SHORT_H}:force_original_aspect_ratio=increase,"
             f"crop={SHORT_W}:{SHORT_H}"
         ),
-        "-c:v", "libx264", "-preset", "fast", "-an",
+        "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-an",
         resized_path,
     ], check=True, capture_output=True)
 
-    # Add captions safely
+    # Add word-by-word animated captions
     print("📝 Adding captions...")
-    caption_text = clean_caption(script)
-    filter_str = (
-        f"drawtext=text='{caption_text}':"
-        f"fontcolor=white:fontsize=46:"
-        f"x=(w-text_w)/2:y=h-280:"
-        f"borderw=4:bordercolor=black:"
-        f"fix_bounds=true:line_spacing=8"
-    )
+    chunks        = split_into_chunks(script, words_per_chunk=4)
+    caption_filter = build_caption_filter(chunks, target_duration)
+
     subprocess.run([
         "ffmpeg", "-y", "-i", resized_path,
-        "-vf", filter_str,
+        "-vf", caption_filter,
+        "-c:v", "libx264", "-preset", "fast", "-crf", "20",
         "-c:a", "copy",
         captioned_path,
     ], check=True, capture_output=True)
 
-    # Merge voiceover — pad audio/video to match durations
+    # Merge voiceover
     print("🔊 Merging voiceover...")
     subprocess.run([
         "ffmpeg", "-y",
         "-i", captioned_path,
         "-i", voiceover_path,
         "-c:v", "copy",
-        "-c:a", "aac",
+        "-c:a", "aac", "-b:a", "192k",
         "-map", "0:v:0",
         "-map", "1:a:0",
         "-shortest",
