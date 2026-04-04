@@ -13,7 +13,7 @@ import subprocess
 PEXELS_API_KEY   = os.environ.get("PEXELS_API_KEY")
 OUTPUT_DIR       = "output"
 SHORT_W, SHORT_H = 1080, 1920
-TARGET_DURATION  = 45.0
+TAIL_PADDING     = 1.0   # seconds of silence added after voiceover ends
 
 # Fallback queries if topic queries not provided
 DEFAULT_QUERIES = [
@@ -122,30 +122,31 @@ def create_video(script: str, voiceover_path: str, title: str,
     download_pexels_video(queries, raw_path)
 
     vo_duration = get_duration(voiceover_path)
-    print(f"✂️  Voiceover: {vo_duration:.1f}s → Target: {TARGET_DURATION:.1f}s")
+    # Dynamic duration = actual voiceover length + short tail padding
+    target_duration = round(vo_duration + TAIL_PADDING, 2)
+    print(f"✂️  Voiceover: {vo_duration:.1f}s → Video duration: {target_duration:.1f}s")
 
-    # Step 1: Pad voiceover to exactly TARGET_DURATION
-    pad_secs = max(TARGET_DURATION - vo_duration + 0.5, 0.5)
+    # Step 1: Pad voiceover by TAIL_PADDING seconds of silence
     run([
         "ffmpeg", "-y",
         "-i", voiceover_path,
-        "-af", f"apad=pad_dur={pad_secs:.2f}",
-        "-t", str(TARGET_DURATION),
+        "-af", f"apad=pad_dur={TAIL_PADDING}",
+        "-t", str(target_duration),
         "-c:a", "aac", "-b:a", "192k",
         padded_audio,
     ])
     print(f"  ✅ Audio padded to {get_duration(padded_audio):.1f}s")
 
-    # Step 2: Loop background to TARGET_DURATION
+    # Step 2: Loop background to target_duration
     bg_dur = get_duration(raw_path)
-    if bg_dur < TARGET_DURATION:
-        loops = int(TARGET_DURATION / bg_dur) + 2
+    if bg_dur < target_duration:
+        loops = int(target_duration / bg_dur) + 2
         print(f"🔁 Looping background {loops}x...")
         run([
             "ffmpeg", "-y",
             "-stream_loop", str(loops),
             "-i", raw_path,
-            "-t", str(TARGET_DURATION),
+            "-t", str(target_duration),
             "-c", "copy",
             looped_path,
         ])
@@ -157,7 +158,7 @@ def create_video(script: str, voiceover_path: str, title: str,
     print("📐 Resizing to vertical format...")
     run([
         "ffmpeg", "-y", "-i", source_path,
-        "-t", str(TARGET_DURATION),
+        "-t", str(target_duration),
         "-vf", (
             f"scale={SHORT_W}:{SHORT_H}:force_original_aspect_ratio=increase,"
             f"crop={SHORT_W}:{SHORT_H}"
@@ -166,7 +167,7 @@ def create_video(script: str, voiceover_path: str, title: str,
         resized_path,
     ])
 
-    # Step 4: Burn in captions (only during voiceover, not silent padding)
+    # Step 4: Burn in captions (synced to full voiceover duration)
     print("📝 Adding captions...")
     chunks = split_into_chunks(script, words_per_chunk=4)
     caption_filter = build_caption_filter(chunks, vo_duration)
@@ -177,7 +178,7 @@ def create_video(script: str, voiceover_path: str, title: str,
         captioned_path,
     ])
 
-    # Step 5: Merge — both streams locked to TARGET_DURATION
+    # Step 5: Merge video + audio, both locked to target_duration
     print("🔊 Merging voiceover...")
     run([
         "ffmpeg", "-y",
@@ -187,7 +188,7 @@ def create_video(script: str, voiceover_path: str, title: str,
         "-map", "1:a:0",
         "-c:v", "copy",
         "-c:a", "copy",
-        "-t", str(TARGET_DURATION),
+        "-t", str(target_duration),
         final_path,
     ])
 
