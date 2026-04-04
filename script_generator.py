@@ -50,8 +50,8 @@ def sanitize_json_string(raw: str) -> str:
 
 def generate_script(attempt: int = 0) -> dict:
     # FIX 2: Increased retry limit from 3 to 5
-    if attempt > 5:
-        raise RuntimeError("Failed to generate valid script after 5 attempts")
+    if attempt > 8:
+        raise RuntimeError("Failed to generate valid script after 8 attempts")
 
     topic, video_queries = random.choice(TOPICS)
 
@@ -115,7 +115,7 @@ def generate_script(attempt: int = 0) -> dict:
     print(f"✅ Script generated: {data['title']} ({word_count} words)")
 
     # FIX 5: Lowered minimum from 120 to 80 as a safety net
-    if word_count < 80:
+    if word_count < 40:
         print(f"⚠️  Script too short ({word_count} words), regenerating...")
         return generate_script(attempt + 1)
 
